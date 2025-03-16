@@ -19,12 +19,27 @@ STATE_FLAGGED = 2
 BTN_CLICK = "<Button-1>"
 BTN_FLAG = "<Button-2>" if platform.system() == 'Darwin' else "<Button-3>"
 
-window = None
 
+class Board:
+    def __init__(self):
+        # create flag and clicked tile variables
+        self.flagCount = 0
+        self.correctFlagCount = 0
+        self.clickedCount = 0
+        self.startTime = None
+
+        # create buttons
+        self.tiles = dict({})
+        self.mines = 0
 
 class Minesweeper:
 
     def __init__(self, tk):
+
+        # state
+        self.my_turn = False
+        self.cur_board = None 
+        self.cur_msg = ""
 
         # import images
         self.images = {
@@ -53,23 +68,20 @@ class Minesweeper:
         self.labels["mines"].grid(row = SIZE_X+1, column = 0, columnspan = int(SIZE_Y/2)) # bottom left
         self.labels["flags"].grid(row = SIZE_X+1, column = int(SIZE_Y/2)-1, columnspan = int(SIZE_Y/2)) # bottom right
 
+
+    def start_game(self):
         self.restart() # start game
         self.updateTimer() # init timer
 
-    def setup(self):
-        # create flag and clicked tile variables
-        self.flagCount = 0
-        self.correctFlagCount = 0
-        self.clickedCount = 0
-        self.startTime = None
 
-        # create buttons
-        self.tiles = dict({})
-        self.mines = 0
+    @staticmethod
+    def setup_board(self) -> Board:
+        self.board = Board()
+
         for x in range(0, SIZE_X):
             for y in range(0, SIZE_Y):
                 if y == 0:
-                    self.tiles[x] = {}
+                    self.board.tiles[x] = {}
 
                 id = str(x) + "_" + str(y)
                 isMine = False
@@ -80,7 +92,7 @@ class Minesweeper:
                 # currently random amount of mines
                 if random.uniform(0.0, 1.0) < 0.1:
                     isMine = True
-                    self.mines += 1
+                    self.board.mines += 1
 
                 tile = {
                     "id": id,
@@ -98,7 +110,7 @@ class Minesweeper:
                 tile["button"].bind(BTN_FLAG, self.onRightClickWrapper(x, y))
                 tile["button"].grid( row = x+1, column = y ) # offset by 1 row for timer
 
-                self.tiles[x][y] = tile
+                self.board.tiles[x][y] = tile
 
         # loop again to find nearby mines and display number on tile
         for x in range(0, SIZE_X):
@@ -106,23 +118,25 @@ class Minesweeper:
                 mc = 0
                 for n in self.getNeighbors(x, y):
                     mc += 1 if n["isMine"] else 0
-                self.tiles[x][y]["mines"] = mc
+                self.board.tiles[x][y]["mines"] = mc
+
+        return self.board
 
     def restart(self):
-        self.setup()
+        self.setup_board()
         self.refreshLabels()
 
     def refreshLabels(self):
-        self.labels["flags"].config(text = "Flags: "+str(self.flagCount))
-        self.labels["mines"].config(text = "Mines: "+str(self.mines))
+        self.labels["flags"].config(text = "Flags: "+str(self.board.flagCount))
+        self.labels["mines"].config(text = "Mines: "+str(self.board.mines))
 
     def gameOver(self, won):
         for x in range(0, SIZE_X):
             for y in range(0, SIZE_Y):
-                if self.tiles[x][y]["isMine"] == False and self.tiles[x][y]["state"] == STATE_FLAGGED:
-                    self.tiles[x][y]["button"].config(image = self.images["wrong"])
-                if self.tiles[x][y]["isMine"] == True and self.tiles[x][y]["state"] != STATE_FLAGGED:
-                    self.tiles[x][y]["button"].config(image = self.images["mine"])
+                if self.board.tiles[x][y]["isMine"] == False and self.board.tiles[x][y]["state"] == STATE_FLAGGED:
+                    self.board.tiles[x][y]["button"].config(image = self.images["wrong"])
+                if self.board.tiles[x][y]["isMine"] == True and self.board.tiles[x][y]["state"] != STATE_FLAGGED:
+                    self.board.tiles[x][y]["button"].config(image = self.images["mine"])
 
         self.tk.update()
 
@@ -135,8 +149,8 @@ class Minesweeper:
 
     def updateTimer(self): # TODO
         ts = "00:00:00"
-        if self.startTime != None:
-            delta = datetime.now() - self.startTime
+        if self.board.startTime != None:
+            delta = datetime.now() - self.board.startTime
             ts = str(delta).split('.')[0] # drop ms
             if delta.total_seconds() < 36000:
                 ts = "0" + ts # zero-pad
@@ -157,20 +171,29 @@ class Minesweeper:
         ]
         for n in coords:
             try:
-                neighbors.append(self.tiles[n["x"]][n["y"]])
+                neighbors.append(self.board.tiles[n["x"]][n["y"]])
             except KeyError:
                 pass
         return neighbors
 
     def onClickWrapper(self, x, y):
-        return lambda Button: self.onClick(self.tiles[x][y])
+        return lambda Button: self.onClick(self.board.tiles[x][y])
 
     def onRightClickWrapper(self, x, y):
-        return lambda Button: self.onRightClick(self.tiles[x][y])
+        return lambda Button: self.onRightClick(self.board.tiles[x][y])
+
+    def check_for_my_turn():
+        if not self.my_turn:
+            print("Wait until your turn")
+            return False
+        return True
 
     def onClick(self, tile):
-        if self.startTime == None:
-            self.startTime = datetime.now()
+        if self.board.startTime == None:
+            self.board.startTime = datetime.now()
+
+        if not self.check_for_my_turn():
+            return
 
         if tile["isMine"] == True:
             # end game
@@ -186,13 +209,13 @@ class Minesweeper:
         # if not already set as clicked, change state and count
         if tile["state"] != STATE_CLICKED:
             tile["state"] = STATE_CLICKED
-            self.clickedCount += 1
-        if self.clickedCount == (SIZE_X * SIZE_Y) - self.mines:
+            self.board.clickedCount += 1
+        if self.board.clickedCount == (SIZE_X * SIZE_Y) - self.board.mines:
             self.gameOver(True)
 
     def onRightClick(self, tile):
-        if self.startTime == None:
-            self.startTime = datetime.now()
+        if self.board.startTime == None:
+            self.board.startTime = datetime.now()
 
         # if not clicked
         if tile["state"] == STATE_DEFAULT:
@@ -201,8 +224,8 @@ class Minesweeper:
             tile["button"].unbind(BTN_CLICK)
             # if a mine
             if tile["isMine"] == True:
-                self.correctFlagCount += 1
-            self.flagCount += 1
+                self.board.correctFlagCount += 1
+            self.board.flagCount += 1
             self.refreshLabels()
         # if flagged, unflag
         elif tile["state"] == 2:
@@ -211,8 +234,8 @@ class Minesweeper:
             tile["button"].bind(BTN_CLICK, self.onClickWrapper(tile["coords"]["x"], tile["coords"]["y"]))
             # if a mine
             if tile["isMine"] == True:
-                self.correctFlagCount -= 1
-            self.flagCount -= 1
+                self.board.correctFlagCount -= 1
+            self.board.flagCount -= 1
             self.refreshLabels()
 
     def clearSurroundingTiles(self, id):
@@ -238,19 +261,6 @@ class Minesweeper:
             tile["button"].config(image = self.images["numbers"][tile["mines"]-1])
 
         tile["state"] = STATE_CLICKED
-        self.clickedCount += 1
+        self.board.clickedCount += 1
 
 ### END OF CLASSES ###
-
-def main():
-    # create Tk instance
-    window = Tk()
-    # set program title
-    window.title("Minesweeper")
-    # create game instance
-    minesweeper = Minesweeper(window)
-    # run event loop
-    window.mainloop()
-
-if __name__ == "__main__":
-    main()

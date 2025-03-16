@@ -1,11 +1,15 @@
 from socket import AF_INET, socket, SOCK_STREAM
 from threading import Thread
+import time
 
 from websockets import broadcast
 
 
 clients = {}
 addresses = {}
+whos_turn = None
+WAIT_FOR_OPPONENT_TIME = 2 # in secs
+CUR_CLIENT = None 
 
 HOST = ''
 PORT = 33000
@@ -26,6 +30,22 @@ def accept_incoming_connections():
         Thread(target=handle_client, args=(client,)).start()
 
 
+def handle_messages(client): 
+    name = clients[client]
+    count_connected_clients = len(clients)
+
+    assert count_connected_clients == 2
+
+    while True:
+        msg = client.recv(BUFSIZ)
+        if msg == bytes("{quit}", "utf8"):
+            client.send(bytes("{quit}", "utf8"))
+            client.close()
+            del clients[client]
+            broadcast(bytes("%s has left the chat." % name, "utf8"))
+            break            
+
+
 def handle_client(client):  
     """Handles a single client connection."""
 
@@ -43,24 +63,21 @@ def handle_client(client):
     broadcast(bytes(msg, "utf8"))
     clients[client] = name
 
-    while True:
-        msg = client.recv(BUFSIZ)
-        if msg == bytes("{quit}", "utf8"):
-            client.send(bytes("{quit}", "utf8"))
-            client.close()
-            del clients[client]
-            broadcast(bytes("%s has left the chat." % name, "utf8"))
-            break
+    while count_connected_clients < 2:
+        msg = "Wait for your opponent"
+        client.send(bytes(msg))
+        time.sleep(WAIT_FOR_OPPONENT_TIME)
+
+    assert count_connected_clients == 2, "No 2 clients"
+
+    try:
+        handle_messages(client=client)    
+    except Exception as e:
+        print(f"Exception during handle_message: {e}")
+    finally:
+        clients.pop(client)
+
         
-        # broadcast(msg, name+": ")    
-
-        if count_connected_clients == 1:
-            pass 
-
-        assert count_connected_clients == 2
-
-        if count_connected_clients == 2:
-            pass 
 
 
 if __name__ == "__main__":
