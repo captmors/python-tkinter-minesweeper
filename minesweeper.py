@@ -21,6 +21,7 @@ BTN_FLAG = "<Button-2>" if platform.system() == 'Darwin' else "<Button-3>"
 
 window = None
 
+
 class Minesweeper:
 
     def __init__(self, tk):
@@ -132,7 +133,7 @@ class Minesweeper:
         else:
             self.tk.quit()
 
-    def updateTimer(self):
+    def updateTimer(self): # TODO
         ts = "00:00:00"
         if self.startTime != None:
             delta = datetime.now() - self.startTime
